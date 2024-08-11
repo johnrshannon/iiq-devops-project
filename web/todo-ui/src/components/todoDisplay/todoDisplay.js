@@ -4,15 +4,15 @@ import TodoItem from './todoItem';
 import Container from 'react-bootstrap/Container';
 import TodoForm from  './todoForm';
 import { useState, useEffect, useCallback } from 'react';
-import { testUrl } from '../../settings';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 
 function TodoDisplay ({setServerUp, serverUp}) {
   const [todoData, setTodoData] = useState([])
+  const BASE_URL = window.BASE_URL;
 
   const pullData = useCallback(() => {
-    fetch(testUrl)
+    fetch(BASE_URL)
       .then(response => response.json())
       .then((resp) => {
         setTodoData(resp)
@@ -32,7 +32,7 @@ function TodoDisplay ({setServerUp, serverUp}) {
     const arrId = todoData.findIndex((obj) => obj.id === id)
     const todoName = todoData[arrId].name
     const putBody = JSON.stringify({name: todoName,isComplete: complete})
-    fetch(testUrl + '/' + id, {
+    fetch(BASE_URL + '/' + id, {
       method: 'Put',
       headers: {
         'accept': '*/*',
@@ -48,7 +48,7 @@ function TodoDisplay ({setServerUp, serverUp}) {
 
   const ListItems = todoData.map(todo => <TodoItem key={todo.id} item={todo} markComplete={markComplete}/>) 
   function addToList(todo) {
-      fetch(testUrl, {
+      fetch(BASE_URL, {
         method: 'Post',
         headers: {
           'accept': '*/*',
