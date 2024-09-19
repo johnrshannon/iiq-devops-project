@@ -1,0 +1,66 @@
+name: build-push-ecr
+run-name: ${{ github.actor }} is deploying ${{ github.event.repository.name }}
+on: [push] 
+jobs: 
+  place-repository-on-remote-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "The following processes are being run on ${{ runner.os }}."
+      
+      - name: check out code from main
+        uses: actions/checkout@v3
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_PUBLIC_ACCESS_KEY_YONI }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_YONI }}
+          aws-region: us-east-2
+
+      - name: Build backend-api docker image
+        run: docker build -t 981677714292.dkr.ecr.us-east-2.amazonaws.com/iiq:iiq-devops-project-api -f ./api/TodoApi/Dockerfile ./api/TodoApi
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v1
+      - run: docker push 981677714292.dkr.ecr.us-east-2.amazonaws.com/iiq:iiq-devops-project-api
+      - run: aws ecs create-cluster --cluster-name automatediiq --capacity-providers FARGATE --settings name=containerInsights,value=enabled
+      - name: Deploy web task definition to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ./iac/automated-todo-app-web.json
+          cluster: automatediiq
+          wait-for-service-stability: true
+      - name: Deploy api task definition to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ./iac/automated-todo-app-api.json
+          cluster: automatediiq
+          wait-for-service-stability: true
+      - name: Run task for api-backend
+        run: aws ecs run-task --cluster automatediiq --task-definition automated-todo-app-api --count 1 --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[subnet-00db69e27ccbfd45d,subnet-09085744d9d07e8e8,subnet-0281ae93ec4ba6bd7],assignPublicIp=ENABLED}"
+      - name: List existing tasks to capture task ID so we can access task ID
+        id: list-task-id
+        run: | 
+            TMP=$(aws ecs list-tasks --cluster automatediiq | grep arn | awk -F\" '{print $2}' | awk -F/ '{print $3}')
+            echo "::set-output name=taskid::$TMP"
+      - name: Use describe-tasks with task ID to get eni
+        id: list-eni
+        run: | 
+            aws ecs wait tasks-running --cluster automatediiq --tasks ${{ steps.list-task-id.outputs.taskid }}
+            TMP=$(aws ecs describe-tasks --cluster automatediiq --tasks ${{ steps.list-task-id.outputs.taskid }} | grep eni | awk -F\" '{print $4}')
+            echo "::set-output name=eni::$TMP"
+      - name: Get public IP for task by accessing ENI
+        id: list-public-ip
+        run: | 
+            TMP=$(aws ec2 describe-network-interfaces --network-interface-ids ${{ steps.list-eni.outputs.eni }} | grep PublicIp | head -n1 | awk -F\" '{print $4}')
+            echo "::set-output name=publicip::$TMP"
+      - name: Write public IP of backend-api to config.js so frontend knows where to access backend
+        run: echo "var BASE_URL = 'http://${{ steps.list-public-ip.outputs.publicip }}:5000/todoitems'" > web/todo-ui/public/config.js
+      - name: Build frontend-web Docker container
+        run: docker build -t 981677714292.dkr.ecr.us-east-2.amazonaws.com/iiq:iiq-devops-project-web -f ./web/todo-ui/Dockerfile ./web/todo-ui
+      - name: Push web-frontend Docker image to ECR
+        run: docker push 981677714292.dkr.ecr.us-east-2.amazonaws.com/iiq:iiq-devops-project-web
+      - name: Run task for web-frontend
+        run: aws ecs run-task --cluster automatediiq --task-definition automated-todo-app-web --count 1 --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[subnet-00db69e27ccbfd45d,subnet-09085744d9d07e8e8,subnet-0281ae93ec4ba6bd7],assignPublicIp=ENABLED}"
+      
+
