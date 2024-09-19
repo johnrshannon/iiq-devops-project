@@ -1,0 +1,47 @@
+{
+    "family": "automated-todo-app-api",
+    "containerDefinitions": [
+        {
+            "name": "todo-app-api",
+            "image": "981677714292.dkr.ecr.us-east-2.amazonaws.com/iiq:iiq-devops-project-api",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "name": "api-5000-tcp",
+                    "containerPort": 5000,
+                    "hostPort": 5000,
+                    "protocol": "tcp",
+                    "appProtocol": "http"
+                }
+            ],
+            "essential": true,
+            "environment": [],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/todo-app-api",
+                    "mode": "non-blocking",
+                    "awslogs-create-group": "true",
+                    "max-buffer-size": "25m",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "systemControls": []
+        }
+    ],
+    "taskRoleArn": "arn:aws:iam::981677714292:role/ECSTaskRole",
+    "executionRoleArn": "arn:aws:iam::981677714292:role/ECSTaskRole",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "1024",
+    "memory": "3072",
+    "runtimePlatform": {
+        "cpuArchitecture": "X86_64",
+        "operatingSystemFamily": "LINUX"
+    }
+}
